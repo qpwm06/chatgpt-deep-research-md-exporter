@@ -34,6 +34,27 @@ body {
   padding: 16px;
 }
 
+.locale-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.locale-button {
+  border-radius: 999px;
+  border: 1px solid rgba(109, 86, 51, 0.14);
+  background: rgba(255, 249, 240, 0.72);
+  color: var(--muted);
+  font: 700 11px/1 "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+  padding: 8px 10px;
+}
+
+.locale-button.active {
+  background: linear-gradient(180deg, #ab6727 0%, var(--primary-strong) 100%);
+  color: #fff8ef;
+  border-color: rgba(127, 69, 19, 0.32);
+}
+
 .hero {
   display: grid;
   gap: 6px;

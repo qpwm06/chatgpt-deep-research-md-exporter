@@ -1,40 +1,45 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Deep Research 导出</title>
+    <title>Deep Research Export</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="app">
+      <section class="locale-bar">
+        <button id="localeEnButton" class="locale-button active" type="button">EN</button>
+        <button id="localeZhButton" class="locale-button" type="button">中文</button>
+      </section>
+
       <header class="hero">
         <div class="eyebrow">ChatGPT Deep Research</div>
-        <h1>Markdown 导出</h1>
-        <p class="subtitle">把全屏报告导出为可用的 `.md`，并尽量把内部 citation 补成真实 URL。</p>
+        <h1 id="heroTitle">Markdown Export</h1>
+        <p id="heroSubtitle" class="subtitle">Export the full report to `.md` and preserve source links whenever possible.</p>
       </header>
 
       <section class="card">
         <label class="field">
-          <span class="field-label">标题前缀</span>
+          <span id="prefixLabel" class="field-label">Title Prefix</span>
           <input id="titlePrefixInput" class="field-input" type="text" value="gpt-" placeholder="gpt-" />
         </label>
-        <div id="status" class="status">正在检查当前标签页…</div>
+        <div id="status" class="status">Checking current tab…</div>
         <div id="summary" class="summary hidden"></div>
         <div id="warnings" class="warnings hidden"></div>
       </section>
 
       <section class="actions">
-        <button id="downloadButton" class="primary" type="button">下载 Markdown</button>
-        <button id="copyButton" class="secondary" type="button">复制 Markdown</button>
+        <button id="downloadButton" class="primary" type="button">Download Markdown</button>
+        <button id="copyButton" class="secondary" type="button">Copy Markdown</button>
       </section>
 
       <section class="tips">
-        <div class="tips-title">使用说明</div>
+        <div id="tipsTitle" class="tips-title">How To Use</div>
         <ul>
-          <li>在 ChatGPT Deep Research 的全屏报告页使用。</li>
-          <li>如果来源 URL 提取不全，先把页面中的 “Sources / 来源” 区域展开后再导出。</li>
-          <li>扩展不会调用 ChatGPT 自带下载，而是直接从页面内容生成 Markdown。</li>
+          <li id="tip1">Use this on a ChatGPT Deep Research full report page.</li>
+          <li id="tip2">If source URLs are incomplete, expand the page’s Sources panel before exporting.</li>
+          <li id="tip3">The extension rebuilds Markdown from the page instead of relying on ChatGPT’s default download.</li>
         </ul>
       </section>
     </main>
