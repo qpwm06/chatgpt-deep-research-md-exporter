@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deep Research 导出</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <div class="eyebrow">ChatGPT Deep Research</div>
+        <h1>Markdown 导出</h1>
+        <p class="subtitle">把全屏报告导出为可用的 `.md`，并尽量把内部 citation 补成真实 URL。</p>
+      </header>
+
+      <section class="card">
+        <label class="field">
+          <span class="field-label">标题前缀</span>
+          <input id="titlePrefixInput" class="field-input" type="text" value="gpt-" placeholder="gpt-" />
+        </label>
+        <div id="status" class="status">正在检查当前标签页…</div>
+        <div id="summary" class="summary hidden"></div>
+        <div id="warnings" class="warnings hidden"></div>
+      </section>
+
+      <section class="actions">
+        <button id="downloadButton" class="primary" type="button">下载 Markdown</button>
+        <button id="copyButton" class="secondary" type="button">复制 Markdown</button>
+      </section>
+
+      <section class="tips">
+        <div class="tips-title">使用说明</div>
+        <ul>
+          <li>在 ChatGPT Deep Research 的全屏报告页使用。</li>
+          <li>如果来源 URL 提取不全，先把页面中的 “Sources / 来源” 区域展开后再导出。</li>
+          <li>扩展不会调用 ChatGPT 自带下载，而是直接从页面内容生成 Markdown。</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
