@@ -99,6 +99,50 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return normalizeText(match?.[1] || '');
   }
 
+  function normalizeMermaidLabel(label) {
+    return String(label || '')
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join('<br/>')
+      .replace(/"/g, '\'');
+  }
+
+  function sanitizeMermaidFlowchart(code) {
+    let out = String(code || '').trim();
+
+    out = out.replace(
+      /(\b[A-Za-z][A-Za-z0-9_-]*)\{([^{}]*?)\}/gs,
+      (_match, id, label) => `${id}{"${normalizeMermaidLabel(label)}"}`,
+    );
+
+    out = out.replace(
+      /(\b[A-Za-z][A-Za-z0-9_-]*)\[([^[\]]*?)\]/gs,
+      (_match, id, label) => `${id}["${normalizeMermaidLabel(label)}"]`,
+    );
+
+    return out;
+  }
+
+  function sanitizeMermaidBlocks(markdown) {
+    return String(markdown || '').replace(/```mermaid\s*\n([\s\S]*?)\n```/g, (_match, code) => {
+      const trimmed = String(code || '').trim();
+      const firstLine = trimmed.split('\n')[0]?.trim().toLowerCase() || '';
+
+      // Older Mermaid/Marid builds often fail on xychart-beta entirely.
+      if (firstLine.startsWith('xychart-beta')) {
+        return `\`\`\`text\n${trimmed}\n\`\`\``;
+      }
+
+      if (firstLine.startsWith('flowchart') || firstLine.startsWith('graph')) {
+        return `\`\`\`mermaid\n${sanitizeMermaidFlowchart(trimmed)}\n\`\`\``;
+      }
+
+      return `\`\`\`mermaid\n${trimmed}\n\`\`\``;
+    });
+  }
+
   function cleanUrl(url) {
     return String(url || '')
       .replace(/\\+/g, '')
@@ -217,7 +261,9 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     );
 
     const frontMatter = buildFrontMatter(title, location.href);
-    const markdownBodyWithTitle = citationReplacement.markdown.replace(/^#\s+.+$/m, `# ${title}`);
+    const markdownBodyWithTitle = sanitizeMermaidBlocks(
+      citationReplacement.markdown.replace(/^#\s+.+$/m, `# ${title}`),
+    );
     const markdown = collapseBlankLines(`${frontMatter}${markdownBodyWithTitle}`) + '\n';
     const warnings = [];
 
@@ -889,7 +935,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
   }
 
   function finalizeMarkdown(markdown, sources, title) {
-    const body = collapseBlankLines(markdown);
+    const body = collapseBlankLines(sanitizeMermaidBlocks(markdown));
     const heading = title ? `# ${title}\n\n` : '';
     const frontMatter = buildFrontMatter(title || document.title || 'Deep Research Report', location.href);
     return collapseBlankLines(`${frontMatter}${heading}${body}`) + '\n';
