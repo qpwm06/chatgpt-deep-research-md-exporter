@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-用于将 **ChatGPT Deep Research** 报告导出为 **Markdown (.md)** 的 Chrome 插件，并将内部引用解析为可直接点击的链接。
+用于将 **ChatGPT Deep Research 分享页报告** 导出为 **Markdown (.md)** 的 Chrome 插件，并将内部引用解析为可直接点击的链接。
 
 便于搜索的名称：
 
@@ -14,7 +14,8 @@
 ## 功能说明
 
 - 将 ChatGPT Deep Research 报告导出为 `.md`
-- 特别适合处理分享后的 Deep Research 链接，例如 `https://chatgpt.com/s/...`
+- 只适用于 **深度研究分享后的链接单独打开后的页面**
+- 使用方式是先单独打开类似 `https://chatgpt.com/s/...` 的分享页，再执行插件
 - 页面暴露内嵌 report 数据时，优先直接提取完整正文
 - 将 ChatGPT 内部研究引用转换为正文内联 Markdown 链接，如 `[2](url)`
 - 导出结果更适合导入 Obsidian、Notion、Typora、GitHub
@@ -24,13 +25,11 @@
 
 ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，离开原页面后不方便使用。
 
-这个插件会直接从页面中重建报告，因此可以把分享后的 Deep Research 页面导出成带完整可点击引用的 Markdown 文档。
+这个插件会直接从页面中重建报告，因此可以把**单独打开的分享版 Deep Research 页面**导出成带完整可点击引用的 Markdown 文档。
 
-## 支持页面
+## 支持页面类型
 
-- ChatGPT Deep Research 分享链接：`https://chatgpt.com/s/...`
-- `chatgpt.com` 上的 Deep Research 全屏报告页
-- `chat.openai.com` 上暴露相同结构的报告页面
+- ChatGPT Deep Research 分享链接单独打开后的页面：`https://chatgpt.com/s/...`
 
 ## 安装方法
 
@@ -41,7 +40,7 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 ## 使用方法
 
-1. 打开分享后的 ChatGPT Deep Research 链接，或完整报告页面
+1. 单独打开 **分享后的 ChatGPT Deep Research 链接**
 2. 点击插件图标
 3. 可选设置标题前缀，默认：`gpt-`
 4. 点击 `下载 Markdown` 或 `复制 Markdown`
@@ -50,8 +49,8 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 - 导出的标题可加前缀，默认 `gpt-`
 - 正文引用会转换成 Markdown 内联链接
-- 对分享链接页面，优先使用页面内嵌结构化 report 提取
-- 对兼容的全屏报告页面，保留 DOM 提取作为 fallback
+- 插件的核心逻辑是针对分享页中的结构化 report 提取
+- 不面向普通 ChatGPT 对话页或其他非分享页面
 
 ## 文件说明
 
@@ -63,7 +62,8 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 - 本项目不调用 OpenAI 私有接口
 - 如果 ChatGPT 页面结构后续调整，可能需要更新选择器或解析规则
-- 某些页面若未暴露足够的 report 数据，会回退到 DOM 提取逻辑
+- 请在“深度研究分享链接单独打开后的页面”上使用
+- 不建议在普通聊天线程或其他非分享页面上使用
 
 ## 关键词
 

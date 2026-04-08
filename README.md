@@ -2,7 +2,7 @@
 
 English | [中文](README.zh-CN.md)
 
-Chrome extension for exporting **ChatGPT Deep Research** reports to **Markdown (.md)** with resolved inline citations.
+Chrome extension for exporting **ChatGPT Deep Research shared-page reports** to **Markdown (.md)** with resolved inline citations.
 
 Search-friendly names:
 
@@ -14,7 +14,8 @@ Search-friendly names:
 ## What It Does
 
 - Exports ChatGPT Deep Research reports to `.md`
-- Works especially well with shared Deep Research links such as `https://chatgpt.com/s/...`
+- Only intended for **standalone shared Deep Research pages**
+- Use it after opening a shared Deep Research link such as `https://chatgpt.com/s/...` in its own page
 - Extracts the embedded report body directly from the page when available
 - Resolves ChatGPT internal research citations into inline Markdown links like `[2](url)`
 - Keeps the output clean for Obsidian, Notion, Typora, and GitHub
@@ -24,13 +25,11 @@ Search-friendly names:
 
 ChatGPT Deep Research exports may leave citations in ChatGPT-internal form, which is inconvenient outside the original page.
 
-This extension rebuilds the report from the page itself, so a shared Deep Research page can be exported as reusable Markdown with complete clickable citations.
+This extension rebuilds the report from the page itself, so a **shared Deep Research page opened directly in its own tab** can be exported as reusable Markdown with complete clickable citations.
 
-## Supported Pages
+## Supported Page Type
 
-- ChatGPT Deep Research shared links: `https://chatgpt.com/s/...`
-- ChatGPT full-page Deep Research report views on `chatgpt.com`
-- `chat.openai.com` pages that expose the same report structure
+- ChatGPT Deep Research shared links opened directly: `https://chatgpt.com/s/...`
 
 ## Installation
 
@@ -41,7 +40,7 @@ This extension rebuilds the report from the page itself, so a shared Deep Resear
 
 ## Usage
 
-1. Open a shared ChatGPT Deep Research link or full report page
+1. Open a **shared ChatGPT Deep Research link** in its own page
 2. Click the extension icon
 3. Optionally set a title prefix, default: `gpt-`
 4. Click `Download Markdown` or `Copy Markdown`
@@ -50,8 +49,8 @@ This extension rebuilds the report from the page itself, so a shared Deep Resear
 
 - The exported title can be prefixed, default `gpt-`
 - Inline citations are converted to Markdown links
-- Shared-link pages prefer structured embedded report extraction
-- DOM-based extraction remains as a fallback for compatible full-page report views
+- The extension is designed around structured extraction from shared Deep Research pages
+- It is not intended for ordinary ChatGPT conversation pages
 
 ## Files
 
@@ -63,7 +62,8 @@ This extension rebuilds the report from the page itself, so a shared Deep Resear
 
 - This project does not call private OpenAI APIs
 - If ChatGPT changes its page structure, selectors or parsing rules may need updates
-- If a page does not expose enough report data, the exporter falls back to DOM extraction
+- Use this extension on a shared Deep Research page opened directly in its own tab
+- It is not intended for generic chat threads or non-shared Deep Research surfaces
 
 ## Keywords
 
