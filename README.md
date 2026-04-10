@@ -65,6 +65,10 @@ This extension rebuilds the report from the page itself, so a **shared Deep Rese
 - Use this extension on a shared Deep Research page opened directly in its own tab
 - It is not intended for generic chat threads or non-shared Deep Research surfaces
 
+## Friend Link
+
+- Community friend link: [LINUX DO](https://linux.do)
+
 ## Keywords
 
 `ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT citation export`, `shared deep research link`, `Markdown exporter`, `Chrome extension`

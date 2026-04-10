@@ -65,6 +65,10 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 - 请在“深度研究分享链接单独打开后的页面”上使用
 - 不建议在普通聊天线程或其他非分享页面上使用
 
+## 友链
+
+- 社区友链：[LINUX DO](https://linux.do)
+
 ## 关键词
 
 `ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT 引用导出`, `分享 deep research 链接`, `Markdown 导出`, `Chrome 插件`
