@@ -2,21 +2,21 @@
 
 [English](README.md) | 中文
 
-用于将 **ChatGPT Deep Research 分享页报告** 导出为 **Markdown (.md)** 的 Chrome 插件，并将内部引用解析为可直接点击的链接。
+用于从具体 ChatGPT 对话中直接导出已打开的 **Deep Research 全屏报告**，生成 **Markdown (.md)** 并将内部引用解析为可点击链接。
 
 便于搜索的名称：
 
 - ChatGPT Deep Research Markdown Exporter
 - ChatGPT Deep Research 导出 Markdown Chrome 插件
 - ChatGPT Deep Research 引用导出插件
-- ChatGPT Deep Research 分享链接导出 Markdown
+- ChatGPT 对话报告导出 Markdown
 
 ## 功能说明
 
 - 将 ChatGPT Deep Research 报告导出为 `.md`
-- 只适用于 **深度研究分享后的链接单独打开后的页面**
-- 使用方式是先单独打开类似 `https://chatgpt.com/s/...` 的分享页，再执行插件
-- 页面暴露内嵌 report 数据时，优先直接提取完整正文
+- 直接在具体 ChatGPT 对话中工作，不需要先生成分享或邀请链接
+- 在具体对话页只提取当前打开的全屏报告，不再自动选择最后一条助手消息
+- 继续兼容能够提供结构化报告数据的旧分享页
 - 将 ChatGPT 内部研究引用转换为正文内联 Markdown 链接，如 `[2](url)`
 - 导出结果更适合导入 Obsidian、Notion、Typora、GitHub
 - 支持直接下载和复制到剪贴板
@@ -25,11 +25,13 @@
 
 ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，离开原页面后不方便使用。
 
-这个插件会直接从页面中重建报告，因此可以把**单独打开的分享版 Deep Research 页面**导出成带完整可点击引用的 Markdown 文档。
+这个插件会直接从当前对话页面重建报告，因此无需先创建分享链接，也能导出带可点击引用的 Markdown 文档。
 
 ## 支持页面类型
 
-- ChatGPT Deep Research 分享链接单独打开后的页面：`https://chatgpt.com/s/...`
+- 普通具体对话：`https://chatgpt.com/c/...`
+- 项目内具体对话：`https://chatgpt.com/g/.../c/...`
+- 兼容的旧版报告分享页仍作为后备路径保留
 
 ## 安装方法
 
@@ -40,17 +42,21 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 ## 使用方法
 
-1. 单独打开 **分享后的 ChatGPT Deep Research 链接**
-2. 点击插件图标
-3. 可选设置标题前缀，默认：`gpt-`
-4. 点击 `下载 Markdown` 或 `复制 Markdown`
+1. 打开包含 Deep Research 结果的具体 ChatGPT 对话
+2. 将报告打开为全屏视图
+3. 点击插件图标
+4. 可选设置标题前缀，默认：`gpt-`
+5. 点击 `开始识别`
+6. 如果按钮可用，可点击 `LaTeX $ 修正`，将 `\[ ... \]` 或仅含数学内容的 `[ ... ]` 块转换为 `$$ ... $$`
+7. 点击 `下载 Markdown` 或 `复制 Markdown`
 
 ## 导出行为
 
 - 导出的标题可加前缀，默认 `gpt-`
 - 正文引用会转换成 Markdown 内联链接
-- 插件的核心逻辑是针对分享页中的结构化 report 提取
-- 不面向普通 ChatGPT 对话页或其他非分享页面
+- 全屏报告正文优先于外围聊天内容
+- 用户提问、输入框和无关助手回复不会进入导出结果
+- 可选的 LaTeX 修正支持 `\[ ... \]` 和仅含数学内容的 `[ ... ]`，不会修改 Markdown 链接、普通方括号文本或代码块
 
 ## 文件说明
 
@@ -62,8 +68,8 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 - 本项目不调用 OpenAI 私有接口
 - 如果 ChatGPT 页面结构后续调整，可能需要更新选择器或解析规则
-- 请在“深度研究分享链接单独打开后的页面”上使用
-- 不建议在普通聊天线程或其他非分享页面上使用
+- 为获得最稳定的结果，请先打开全屏报告再导出
+- 未打开全屏报告时会明确提示，不会从多轮会话中猜测目标报告
 
 ## 友链
 
@@ -71,4 +77,4 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 ## 关键词
 
-`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT 引用导出`, `分享 deep research 链接`, `Markdown 导出`, `Chrome 插件`
+`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT 引用导出`, `对话报告`, `Markdown 导出`, `Chrome 插件`

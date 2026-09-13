@@ -1,6 +1,8 @@
 const statusNode = document.getElementById('status');
 const summaryNode = document.getElementById('summary');
 const warningsNode = document.getElementById('warnings');
+const startButton = document.getElementById('startButton');
+const latexFixButton = document.getElementById('latexFixButton');
 const downloadButton = document.getElementById('downloadButton');
 const copyButton = document.getElementById('copyButton');
 const titlePrefixInput = document.getElementById('titlePrefixInput');
@@ -16,56 +18,69 @@ const tip3Node = document.getElementById('tip3');
 
 let cachedExport = null;
 let cachedTabId = null;
+let cachedTabUrl = null;
 let cachedPrefix = 'gpt-';
 let currentLocale = 'en';
 
 const MESSAGES = {
   en: {
     hero_title: 'Markdown Export',
-    hero_subtitle: 'Export the full report to `.md` and preserve source links whenever possible.',
+    hero_subtitle: 'Export the open full-screen report from a ChatGPT conversation to `.md`.',
     prefix_label: 'Title Prefix',
+    status_idle: 'Open the report full screen, then start detection.',
     status_checking: 'Checking current tab…',
     status_generating: 'Generating Markdown…',
     status_ready: 'Page detected. You can download or copy now.',
     status_download_started: 'Markdown download started.',
     status_copied: 'Markdown copied to clipboard.',
+    status_latex_fixed: 'LaTeX display delimiters were converted to `$$`.',
+    status_latex_unchanged: 'No LaTeX display formulas using `\\[ ... \\]` or bare `[ ... ]` were found.',
+    start_button: 'Start Detection',
+    latex_fix_button: 'Fix LaTeX $',
     download_button: 'Download Markdown',
     copy_button: 'Copy Markdown',
     tips_title: 'How To Use',
-    tip1: 'Use this on a ChatGPT Deep Research full report page.',
+    tip1: 'Open a specific ChatGPT conversation, then open its Deep Research report full screen.',
     tip2: 'If source URLs are incomplete, expand the page’s Sources panel before exporting.',
     tip3: 'The extension rebuilds Markdown from the page instead of relying on ChatGPT’s default download.',
     summary_title: 'Title',
     summary_sources: 'Source Links',
     summary_citations: 'Inline Citations',
     summary_length: 'Markdown Length',
+    summary_latex_fixes: 'LaTeX Fixes Available',
     error_tab: 'No readable active tab was found.',
-    error_page: 'Please switch to a ChatGPT Deep Research report page first.',
+    error_page: 'Please open a Deep Research report in a ChatGPT conversation first.',
     generic_export_failed: 'Export failed.',
     generic_download_failed: 'Download failed.',
     generic_copy_failed: 'Copy failed.',
   },
   'zh-CN': {
     hero_title: 'Markdown 导出',
-    hero_subtitle: '把全屏报告导出为可用的 `.md`，并尽量保留来源链接。',
+    hero_subtitle: '直接把 ChatGPT 对话中已打开的全屏报告导出为 `.md`。',
     prefix_label: '标题前缀',
+    status_idle: '请先打开目标报告的全屏视图，然后点击开始识别。',
     status_checking: '正在检查当前标签页…',
     status_generating: '正在生成 Markdown…',
     status_ready: '页面已识别，可以下载或复制。',
     status_download_started: 'Markdown 已开始下载。',
     status_copied: 'Markdown 已复制到剪贴板。',
+    status_latex_fixed: '已将 LaTeX 行间公式分隔符转换为 `$$`。',
+    status_latex_unchanged: '没有发现使用 `\\[ ... \\]` 或裸 `[ ... ]` 的 LaTeX 行间公式。',
+    start_button: '开始识别',
+    latex_fix_button: 'LaTeX $ 修正',
     download_button: '下载 Markdown',
     copy_button: '复制 Markdown',
     tips_title: '使用说明',
-    tip1: '在 ChatGPT Deep Research 的全屏报告页使用。',
+    tip1: '进入具体 ChatGPT 对话，并先把其中的 Deep Research 报告全屏打开。',
     tip2: '如果来源 URL 提取不全，先把页面中的 Sources 区域展开后再导出。',
     tip3: '扩展不会调用 ChatGPT 自带下载，而是直接从页面内容生成 Markdown。',
     summary_title: '标题',
     summary_sources: '来源链接',
     summary_citations: '文内引用',
     summary_length: 'Markdown 长度',
+    summary_latex_fixes: '可修正 LaTeX',
     error_tab: '没有可用的当前标签页。',
-    error_page: '请先切到 ChatGPT 的 Deep Research 全屏报告页面。',
+    error_page: '请先进入具体 ChatGPT 对话并打开 Deep Research 全屏报告。',
     generic_export_failed: '导出失败。',
     generic_download_failed: '下载失败。',
     generic_copy_failed: '复制失败。',
@@ -111,6 +126,8 @@ function applyLocale() {
   heroTitleNode.textContent = t('hero_title');
   heroSubtitleNode.textContent = t('hero_subtitle');
   prefixLabelNode.textContent = t('prefix_label');
+  startButton.textContent = t('start_button');
+  latexFixButton.textContent = t('latex_fix_button');
   downloadButton.textContent = t('download_button');
   copyButton.textContent = t('copy_button');
   tipsTitleNode.textContent = t('tips_title');
@@ -147,12 +164,57 @@ function currentPrefix() {
 }
 
 function setBusy(isBusy) {
-  downloadButton.disabled = isBusy;
-  copyButton.disabled = isBusy;
+  startButton.disabled = isBusy;
+  latexFixButton.disabled = isBusy || !cachedExport || countLatexDisplayDelimiters(cachedExport.markdown) === 0;
+  downloadButton.disabled = isBusy || !cachedExport;
+  copyButton.disabled = isBusy || !cachedExport;
 }
 
 function setStatus(message) {
   statusNode.textContent = message;
+}
+
+function countLatexDisplayDelimiters(markdown) {
+  return fixLatexDisplayDelimiters(markdown).replacementCount;
+}
+
+function looksLikeBareLatexFormula(formula) {
+  const text = String(formula || '').trim();
+  if (!text || /^https?:\/\//i.test(text)) return false;
+  return (
+    /\\[A-Za-z]+/.test(text)
+    || /[_^]\s*(?:\{|[A-Za-z0-9])/.test(text)
+    || /[=+*/<>]|(?:^|\s)-(?:\s|$)/.test(text)
+  );
+}
+
+function fixLatexInMarkdownText(markdown) {
+  let replacementCount = 0;
+  let fixed = String(markdown || '').replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, formula) => {
+    replacementCount += 1;
+    return `$$\n${String(formula || '').trim()}\n$$`;
+  });
+
+  fixed = fixed.replace(/(^|\n)[ \t]*\[\s*([^\n]*?)\s*\][ \t]*(?=\n|$)/g, (match, leadingNewline, formula) => {
+    if (!looksLikeBareLatexFormula(formula)) return match;
+    replacementCount += 1;
+    return `${leadingNewline}$$\n${String(formula || '').trim()}\n$$`;
+  });
+
+  return { markdown: fixed, replacementCount };
+}
+
+function fixLatexDisplayDelimiters(markdown) {
+  let replacementCount = 0;
+  const parts = String(markdown || '').split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g);
+  const fixed = parts.map((part) => {
+    if (/^(?:```|~~~)/.test(part)) return part;
+    const result = fixLatexInMarkdownText(part);
+    replacementCount += result.replacementCount;
+    return result.markdown;
+  }).join('');
+
+  return { markdown: fixed, replacementCount };
 }
 
 function renderSummary(result) {
@@ -161,6 +223,7 @@ function renderSummary(result) {
     `${t('summary_sources')}: ${result.sourceCount}`,
     `${t('summary_citations')}: ${result.citationCount}`,
     `${t('summary_length')}: ${result.markdown.length}`,
+    `${t('summary_latex_fixes')}: ${countLatexDisplayDelimiters(result.markdown)}`,
   ];
 
   summaryNode.innerHTML = '';
@@ -188,6 +251,56 @@ async function getActiveTab() {
   return tabs[0] || null;
 }
 
+function isDirectConversationUrl(url) {
+  try {
+    return /(?:^|\/)c\/[a-z0-9-]+(?:\/|$)/i.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function sendExportMessage(tab, message) {
+  if (!isDirectConversationUrl(tab.url) || !chrome.webNavigation?.getAllFrames) {
+    return chrome.tabs.sendMessage(tab.id, message);
+  }
+
+  let frames = [];
+  try {
+    frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }) || [];
+  } catch {}
+
+  const deepResearchHost = 'connector-openai-deep-research.web-sandbox.oaiusercontent.com';
+  const orderedFrameIds = frames
+    .sort((left, right) => {
+      const leftDeepResearch = String(left.url || '').includes(deepResearchHost) ? 1 : 0;
+      const rightDeepResearch = String(right.url || '').includes(deepResearchHost) ? 1 : 0;
+      if (leftDeepResearch !== rightDeepResearch) return rightDeepResearch - leftDeepResearch;
+      if (left.frameId === 0) return 1;
+      if (right.frameId === 0) return -1;
+      return left.frameId - right.frameId;
+    })
+    .map((frame) => frame.frameId)
+    .filter((frameId, index, items) => Number.isInteger(frameId) && items.indexOf(frameId) === index);
+
+  if (!orderedFrameIds.includes(0)) orderedFrameIds.push(0);
+
+  let lastResponse = null;
+  let lastError = null;
+  // Deep Research 正文位于跨域 iframe；逐帧请求可避免顶层错误抢先覆盖正确结果。
+  for (const frameId of orderedFrameIds) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, message, { frameId });
+      if (response?.ok) return response;
+      if (response) lastResponse = response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastError || new Error(t('generic_export_failed'));
+}
+
 async function requestExport(force = false) {
   const tab = await getActiveTab();
   if (!tab?.id || !tab.url) {
@@ -198,13 +311,14 @@ async function requestExport(force = false) {
     throw new Error(t('error_page'));
   }
 
-  if (!force && cachedExport && cachedTabId === tab.id) {
+  if (!force && cachedExport && cachedTabId === tab.id && cachedTabUrl === tab.url) {
     return cachedExport;
   }
 
-  const response = await chrome.tabs.sendMessage(tab.id, {
+  const response = await sendExportMessage(tab, {
     type: 'DEEP_RESEARCH_EXPORT_MARKDOWN',
     titlePrefix: currentPrefix(),
+    sourceUrl: tab.url,
   });
 
   if (!response?.ok) {
@@ -212,6 +326,7 @@ async function requestExport(force = false) {
   }
 
   cachedTabId = tab.id;
+  cachedTabUrl = tab.url;
   cachedExport = response.result;
   return response.result;
 }
@@ -272,7 +387,26 @@ async function copyMarkdown() {
   }
 }
 
+function fixCachedLatex() {
+  if (!cachedExport) return;
+
+  const fixed = fixLatexDisplayDelimiters(cachedExport.markdown);
+  if (fixed.replacementCount === 0) {
+    setStatus(t('status_latex_unchanged'));
+    setBusy(false);
+    return;
+  }
+
+  cachedExport = { ...cachedExport, markdown: fixed.markdown };
+  renderSummary(cachedExport);
+  setStatus(`${t('status_latex_fixed')} (${fixed.replacementCount})`);
+  setBusy(false);
+}
+
 async function inspectCurrentTab() {
+  cachedExport = null;
+  cachedTabId = null;
+  cachedTabUrl = null;
   setBusy(true);
   setStatus(t('status_checking'));
 
@@ -282,6 +416,9 @@ async function inspectCurrentTab() {
     renderWarnings(result.warnings);
     setStatus(t('status_ready'));
   } catch (error) {
+    cachedExport = null;
+    cachedTabId = null;
+    cachedTabUrl = null;
     renderWarnings([]);
     summaryNode.classList.add('hidden');
     setStatus(error instanceof Error ? error.message : String(error || t('generic_export_failed')));
@@ -290,6 +427,8 @@ async function inspectCurrentTab() {
   }
 }
 
+startButton.addEventListener('click', inspectCurrentTab);
+latexFixButton.addEventListener('click', fixCachedLatex);
 downloadButton.addEventListener('click', downloadMarkdown);
 copyButton.addEventListener('click', copyMarkdown);
 localeEnButton.addEventListener('click', async () => {
@@ -302,10 +441,15 @@ titlePrefixInput.addEventListener('change', async () => {
   await savePrefix(currentPrefix());
   cachedExport = null;
   cachedTabId = null;
-  inspectCurrentTab();
+  cachedTabUrl = null;
+  renderWarnings([]);
+  summaryNode.classList.add('hidden');
+  setStatus(t('status_idle'));
+  setBusy(false);
 });
 document.addEventListener('DOMContentLoaded', async () => {
   await loadLocale();
   await loadPrefix();
-  inspectCurrentTab();
+  setStatus(t('status_idle'));
+  setBusy(false);
 });

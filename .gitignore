@@ -1,2 +1,4 @@
 .DS_Store
 share.html
+__pycache__/
+*.py[cod]

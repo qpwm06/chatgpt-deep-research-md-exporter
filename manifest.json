@@ -1,19 +1,21 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Deep Research Markdown Exporter",
-  "version": "0.1.0",
-  "description": "Export ChatGPT Deep Research fullscreen reports to Markdown with real source URLs.",
+  "version": "0.2.0",
+  "description": "Export Deep Research reports directly from ChatGPT conversations to Markdown with source URLs.",
   "permissions": [
     "activeTab",
     "tabs",
     "downloads",
     "storage",
+    "webNavigation",
     "clipboardRead",
     "clipboardWrite"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
-    "https://chat.openai.com/*"
+    "https://chat.openai.com/*",
+    "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/*"
   ],
   "action": {
     "default_title": "Deep Research Markdown Exporter",
@@ -23,11 +25,14 @@
     {
       "matches": [
         "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/*"
       ],
       "js": [
         "content.js"
       ],
+      "all_frames": true,
+      "match_origin_as_fallback": true,
       "run_at": "document_idle"
     }
   ]

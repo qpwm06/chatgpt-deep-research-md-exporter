@@ -2,11 +2,35 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
   globalThis.__deepResearchMarkdownExporterLoaded = true;
 
   const SOURCE_HEADING_RE = /\b(sources?|references?)\b|来源|参考|引用/i;
+  const CITATION_HEADING_RE = /\bcitations?\b|文内引用|引文|引用/i;
   const TOC_HEADING_RE = /\b(table of contents|contents?)\b|目录/i;
   const REPORT_HEADING_RE = /\b(report|research)\b|报告|研究/i;
   const SKIP_SECTION_RE = /\b(table of contents|contents|sources?|references?|activity|history)\b|目录|来源|参考|引用|活动记录|过程/i;
   const INTERNAL_HOST_RE = /(^|\.)((chatgpt\.com)|(chat\.openai\.com))$/i;
   const CHAT_UI_RE = /\b(copy|share|retry|regenerate|edit|message chatgpt|ask anything)\b|复制|分享|重试|重新生成|继续追问|发送消息/i;
+  const FULLSCREEN_LAYER_SELECTOR = [
+    'dialog[open]',
+    '[role="dialog"]',
+    '[aria-modal="true"]',
+    '[data-writing-block-fullscreen-editor-layout="fullscreen"]',
+    '[data-writing-block-fullscreen-editor-layout]:not([data-writing-block-fullscreen-editor-layout="inline"])',
+    '[data-state="open"]',
+    '[class~="fixed"][class~="inset-0"]',
+    '[class~="fixed"][class~="start-0"][class~="end-0"][class~="top-0"][class~="bottom-0"]',
+    '[style*="position:fixed"]',
+    '[style*="position: fixed"]',
+  ].join(', ');
+  const REPORT_CONTENT_SELECTOR = [
+    '[data-testid*="deep-research" i]',
+    '[data-testid*="research-report" i]',
+    '[data-testid*="report-view" i]',
+    '[data-writing-block-fullscreen-editor-region="true"]',
+    '[data-writing-block="true"]',
+    '[class*="markdown"]',
+    '[class*="prose"]',
+    'article',
+    'section',
+  ].join(', ');
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -238,7 +262,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     };
   }
 
-  function extractStructuredReport(titlePrefix = '') {
+  function extractStructuredReport(titlePrefix = '', sourceUrl = location.href) {
     const payload = extractTransportPayloadsFromScripts().find((item) => (
       item.includes('report_message')
       && item.includes('content_references')
@@ -260,7 +284,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       titlePrefix,
     );
 
-    const frontMatter = buildFrontMatter(title, location.href);
+    const frontMatter = buildFrontMatter(title, sourceUrl);
     const markdownBodyWithTitle = sanitizeMermaidBlocks(
       citationReplacement.markdown.replace(/^#\s+.+$/m, `# ${title}`),
     );
@@ -361,10 +385,30 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       .filter((node) => isVisible(node))
       .filter((node) => looksLikeSourceHeading(node.textContent || node.getAttribute?.('aria-label') || ''));
 
-    for (const element of candidates.slice(0, 3)) {
-      try {
-        element.click();
-      } catch {}
+    const toggles = candidates.filter((node) => {
+      const label = normalizeText(`${node.textContent || ''} ${node.getAttribute?.('aria-label') || ''}`);
+      return (
+        node.hasAttribute('aria-expanded')
+        || node.getAttribute('aria-haspopup') === 'dialog'
+        || /sources? and activity|来源与活动/i.test(label)
+      );
+    });
+    const controls = toggles.length > 0 ? toggles : candidates;
+
+    if (controls.some((node) => (
+      node.getAttribute('aria-expanded') === 'true'
+      || node.getAttribute('aria-selected') === 'true'
+    ))) return true;
+
+    // 当前脚本运行在已选中的 Deep Research frame 内，工具栏与正文可能是兄弟节点。
+    const control = controls.find((node) => node.getAttribute('aria-selected') !== 'true');
+    if (!control) return false;
+
+    try {
+      control.click();
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -394,6 +438,28 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
         container = container.parentElement;
       }
     }
+
+    return dedupeBy(sections, (item) => item);
+  }
+
+  function collectCitationSections() {
+    const sections = Array.from(document.querySelectorAll([
+      'section[aria-labelledby*="citation" i]',
+      'section[id*="citation" i]',
+      '[role="tabpanel"] section',
+    ].join(', '))).filter((section) => {
+      if (!isVisible(section)) return false;
+
+      const labelledBy = section.getAttribute('aria-labelledby') || '';
+      const label = labelledBy
+        ? document.getElementById(labelledBy)?.textContent || ''
+        : '';
+      const ownHeading = section.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"], p[id]');
+      return (
+        /citation/i.test(`${section.id} ${labelledBy}`)
+        || CITATION_HEADING_RE.test(normalizeText(label || ownHeading?.textContent))
+      );
+    });
 
     return dedupeBy(sections, (item) => item);
   }
@@ -439,10 +505,55 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return dedupeBy(sourceEntries, (item) => `${item.index}::${item.url}`);
   }
 
+  function findCitationEntry(link, section) {
+    let cursor = link.parentElement;
+    while (cursor && cursor !== section) {
+      const marker = cursor.querySelector('[data-citation-index], [data-citation-id], [data-source-id]');
+      if (marker) return { container: cursor, marker };
+      cursor = cursor.parentElement;
+    }
+    return null;
+  }
+
+  function collectCitationSources(sections) {
+    const sourceEntries = [];
+
+    // 新版全屏报告按域名分组显示引用，DOM 顺序不等于引用编号。
+    for (const section of sections) {
+      const links = Array.from(section.querySelectorAll('a[href]'))
+        .filter((link) => isVisible(link))
+        .map((link) => ({
+          element: link,
+          href: toAbsoluteUrl(link.getAttribute('href')),
+        }))
+        .filter((item) => isExternalUrl(item.href));
+
+      for (const item of links) {
+        const entry = findCitationEntry(item.element, section);
+        if (!entry) continue;
+
+        const ids = parseCitationIds(entry.marker);
+        const index = ids[0];
+        if (!Number.isInteger(index) || index <= 0) continue;
+
+        const rawBlockText = normalizeText(entry.container.textContent);
+        sourceEntries.push({
+          index,
+          title: normalizeText(item.element.textContent) || rawBlockText || item.href,
+          url: item.href,
+          blockText: rawBlockText,
+        });
+      }
+    }
+
+    return dedupeBy(sourceEntries, (item) => String(item.index));
+  }
+
   function collectFallbackSources(root) {
     const links = Array.from(root.querySelectorAll('a[href]'))
       .filter((link) => isVisible(link))
       .map((link) => ({
+        element: link,
         url: toAbsoluteUrl(link.getAttribute('href')),
         title: normalizeText(link.textContent) || normalizeText(link.getAttribute('title')) || '',
       }))
@@ -450,7 +561,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
 
     const deduped = dedupeBy(links, (item) => item.url);
     return deduped.map((item, index) => ({
-      index: index + 1,
+      index: parseCitationIds(findCitationEntry(item.element, root)?.marker || item.element)[0] || index + 1,
       title: item.title || item.url,
       url: item.url,
       blockText: item.title || item.url,
@@ -458,12 +569,30 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
   }
 
   async function extractSources(root) {
-    maybeOpenSourcesPanels();
-    await sleep(250);
+    const openedSources = maybeOpenSourcesPanels();
+    let sources = [];
 
-    let sources = collectSourcesFromSections(collectSourceSections());
+    // 来源抽屉异步渲染；优先等待带真实 citation index 的引用列表。
+    const attempts = openedSources ? 25 : 1;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (openedSources) await sleep(200);
+      const citationSections = collectCitationSections();
+      sources = collectCitationSources(citationSections);
+      if (sources.length > 0) break;
+
+      // 兼容旧版分享页：其 Sources 面板使用普通标题和链接列表。
+      if (citationSections.length === 0) {
+        sources = collectSourcesFromSections(collectSourceSections());
+        if (sources.length > 0) break;
+      }
+    }
+
     if (sources.length === 0) {
-      sources = collectFallbackSources(root);
+      sources = collectSourcesFromSections(collectSourceSections());
+    }
+    if (sources.length === 0) {
+      const fallbackRoot = window.top === window ? root : document.body;
+      sources = collectFallbackSources(fallbackRoot);
     }
 
     sources.sort((left, right) => left.index - right.index);
@@ -533,6 +662,109 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     if (element.querySelectorAll('[data-message-author-role]').length > 1) return false;
 
     return true;
+  }
+
+  function hasReportShape(element) {
+    if (!(element instanceof HTMLElement) || !isVisible(element)) return false;
+
+    const textLength = normalizeText(element.textContent).length;
+    const headingCount = element.querySelectorAll('h1, h2, h3').length;
+    const paragraphCount = element.querySelectorAll('p').length;
+    const externalLinkCount = Array.from(element.querySelectorAll('a[href]'))
+      .map((link) => toAbsoluteUrl(link.getAttribute('href')))
+      .filter((href) => isExternalUrl(href))
+      .length;
+    const headingText = normalizeText(
+      Array.from(element.querySelectorAll('h1, h2, h3'))
+        .slice(0, 4)
+        .map((heading) => heading.textContent)
+        .join(' '),
+    );
+
+    if (textLength < 800 || element.querySelector('form, textarea')) return false;
+    return (
+      headingCount >= 2
+      || (headingCount >= 1 && paragraphCount >= 4)
+      || (headingCount >= 1 && externalLinkCount >= 2)
+      || REPORT_HEADING_RE.test(headingText)
+    );
+  }
+
+  function bestReportContentWithin(scope) {
+    if (!(scope instanceof HTMLElement) || !isVisible(scope)) return null;
+
+    const candidates = new Set([scope, ...scope.querySelectorAll(REPORT_CONTENT_SELECTOR)]);
+    let best = null;
+    let bestScore = -1;
+
+    for (const candidate of candidates) {
+      if (!hasReportShape(candidate)) continue;
+
+      let score = scoreCandidate(candidate);
+      if (candidate.matches('[data-testid*="deep-research" i], [data-testid*="research-report" i], [data-testid*="report-view" i]')) {
+        score += 5000;
+      }
+      if (candidate.matches('[class*="markdown"], [class*="prose"]')) {
+        score += 2500;
+      }
+
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+
+    return best;
+  }
+
+  function isFullscreenLayer(element) {
+    if (!(element instanceof HTMLElement) || !isVisible(element)) return false;
+    if (element.matches([
+      'dialog[open]',
+      '[role="dialog"]',
+      '[aria-modal="true"]',
+      '[data-writing-block-fullscreen-editor-layout]:not([data-writing-block-fullscreen-editor-layout="inline"])',
+    ].join(', '))) return true;
+
+    const rect = element.getBoundingClientRect();
+    const viewportArea = Math.max(window.innerWidth * window.innerHeight, 1);
+    return (rect.width * rect.height) / viewportArea >= 0.35;
+  }
+
+  function findReportRootFromFullscreenLayer() {
+    // ChatGPT 使用 portal 渲染全屏报告，它通常不在 <main> 内。
+    const explicitReports = Array.from(document.querySelectorAll(
+      '[data-testid*="deep-research" i], [data-testid*="research-report" i], [data-testid*="report-view" i]',
+    ));
+    const layers = Array.from(document.querySelectorAll(FULLSCREEN_LAYER_SELECTOR))
+      .filter((node) => isFullscreenLayer(node));
+
+    let best = null;
+    let bestScore = -1;
+    for (const scope of [...explicitReports, ...layers]) {
+      const candidate = bestReportContentWithin(scope);
+      if (!candidate) continue;
+
+      const score = scoreCandidate(candidate)
+        + (candidate.matches('[data-testid*="report" i]') ? 5000 : 0);
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+
+    return best;
+  }
+
+  function findReportRootFromAssistantMessages(main) {
+    const messages = Array.from(main.querySelectorAll('[data-message-author-role="assistant"]'));
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      const candidate = bestReportContentWithin(message);
+      if (candidate) return candidate;
+    }
+
+    return null;
   }
 
   function getHashTarget(anchor) {
@@ -622,7 +854,13 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
   }
 
   function findReportRoot() {
+    const fullscreenReport = findReportRootFromFullscreenLayer();
+    if (fullscreenReport) return fullscreenReport;
+
     const main = document.querySelector('main') || document.body;
+
+    const assistantReport = findReportRootFromAssistantMessages(main);
+    if (assistantReport) return assistantReport;
 
     const byToc = findReportRootFromToc(main);
     if (byToc) return byToc;
@@ -692,6 +930,15 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     const ids = new Set();
     const text = normalizeText(element.textContent || '');
     for (const id of parseCitationIdsFromText(text)) ids.add(id);
+
+    if (element.matches?.('sup, button, a, span') && /^\d{1,3}$/.test(text)) {
+      ids.add(Number.parseInt(text, 10));
+    }
+
+    const directIndex = element.getAttribute?.('data-citation-index');
+    if (/^\d{1,3}$/.test(directIndex || '')) {
+      ids.add(Number.parseInt(directIndex, 10));
+    }
 
     for (const attrName of ['href', 'data-source-id', 'data-citation-id', 'aria-label']) {
       const raw = element.getAttribute?.(attrName);
@@ -767,6 +1014,9 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
 
       if (!href || !isExternalUrl(href)) {
         return text;
+      }
+      if (/^\[\d{1,3}\]$/.test(text)) {
+        return `${text}(${href})`;
       }
       return `[${text}](${href})`;
     }
@@ -886,6 +1136,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     if (!(element instanceof Element) || !isVisible(element) || shouldSkipSection(element)) {
       return '';
     }
+    if (element === context.skipTitleElement) return '';
 
     const tag = element.tagName.toLowerCase();
 
@@ -934,33 +1185,55 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     ].join('\n');
   }
 
-  function finalizeMarkdown(markdown, sources, title) {
+  function finalizeMarkdown(markdown, sources, title, sourceUrl = location.href) {
     const body = collapseBlankLines(sanitizeMermaidBlocks(markdown));
     const heading = title ? `# ${title}\n\n` : '';
-    const frontMatter = buildFrontMatter(title || document.title || 'Deep Research Report', location.href);
+    const frontMatter = buildFrontMatter(title || document.title || 'Deep Research Report', sourceUrl);
     return collapseBlankLines(`${frontMatter}${heading}${body}`) + '\n';
   }
 
-  async function exportMarkdown(titlePrefix = '') {
-    const structured = extractStructuredReport(titlePrefix);
-    if (structured) {
-      return structured;
+  function isDirectConversationPage() {
+    return /(?:^|\/)c\/[a-z0-9-]+(?:\/|$)/i.test(location.pathname);
+  }
+
+  function findTitleElement(root) {
+    if (!(root instanceof Element)) return null;
+    const ownTitle = root.querySelector('h1');
+    if (ownTitle) return ownTitle;
+
+    const layer = root.closest(FULLSCREEN_LAYER_SELECTOR);
+    return layer?.querySelector('h1') || null;
+  }
+
+  async function exportMarkdown(titlePrefix = '', sourceUrl = location.href) {
+    // 分享页优先读取内嵌 payload；具体聊天页优先导出用户当前打开的报告。
+    if (!isDirectConversationPage()) {
+      const structured = extractStructuredReport(titlePrefix, sourceUrl);
+      if (structured) {
+        return structured;
+      }
     }
 
-    const root = findReportRoot();
+    const directConversation = isDirectConversationPage();
+    const root = directConversation ? findReportRootFromFullscreenLayer() : findReportRoot();
     if (!root) {
+      if (directConversation) {
+        throw new Error('没有识别到当前全屏报告。请先将目标报告打开为全屏视图，再点击开始识别。');
+      }
+      const structured = extractStructuredReport(titlePrefix, sourceUrl);
+      if (structured) return structured;
       throw new Error('没有识别到 Deep Research 报告主体。请先打开全屏报告页。');
     }
 
-    const titleElement = root.querySelector('h1') || document.querySelector('main h1') || document.querySelector('h1');
+    const titleElement = findTitleElement(root) || document.querySelector('main h1') || document.querySelector('h1');
     const title = applyTitlePrefix(
       normalizeText(titleElement?.textContent || document.title || 'Deep Research Report'),
       titlePrefix,
     );
     const sources = await extractSources(root);
     const sourceIndexSet = new Map(sources.map((item) => [item.index, item]));
-    const markdownBody = renderChildren(root, { sourceIndexSet });
-    const markdown = finalizeMarkdown(markdownBody, sources, title);
+    const markdownBody = renderChildren(root, { sourceIndexSet, skipTitleElement: titleElement });
+    const markdown = finalizeMarkdown(markdownBody, sources, title, sourceUrl);
     const citationMatches = markdownBody.match(/\[\d+\]\(https?:\/\/[^)]+\)/g) || [];
 
     const warnings = [];
@@ -985,7 +1258,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     if (message?.type !== 'DEEP_RESEARCH_EXPORT_MARKDOWN') return undefined;
 
     (async () => {
-      const result = await exportMarkdown(message?.titlePrefix || 'gpt-');
+      const result = await exportMarkdown(message?.titlePrefix || 'gpt-', message?.sourceUrl || location.href);
       sendResponse({ ok: true, result });
     })().catch((error) => {
       sendResponse({
