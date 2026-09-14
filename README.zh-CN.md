@@ -18,6 +18,9 @@
 - 在具体对话页只提取当前打开的全屏报告，不再自动选择最后一条助手消息
 - 继续兼容能够提供结构化报告数据的旧分享页
 - 将 ChatGPT 内部研究引用转换为正文内联 Markdown 链接，如 `[2](url)`
+- 按 citation 轮播中实际存在的来源卡片拆分合并引用，单来源 citation 仍只导出一个链接
+- 保留 Markdown 表格内的 citation 链接
+- 自动打开 ChatGPT 的“显示代码”视图，导出 Mermaid 源码而不是渲染后的 SVG
 - 导出结果更适合导入 Obsidian、Notion、Typora、GitHub
 - 支持直接下载和复制到剪贴板
 
@@ -54,6 +57,9 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 - 导出的标题可加前缀，默认 `gpt-`
 - 正文引用会转换成 Markdown 内联链接
+- 一个 citation 对应多张来源卡片时，会导出为多个独立编号链接
+- 忽略域名分组顶部链接，避免把同域名下的无关 URL 绑定到 citation
+- Mermaid 图表从源码视图导出
 - 全屏报告正文优先于外围聊天内容
 - 用户提问、输入框和无关助手回复不会进入导出结果
 - 可选的 LaTeX 修正支持 `\[ ... \]` 和仅含数学内容的 `[ ... ]`，不会修改 Markdown 链接、普通方括号文本或代码块
@@ -63,6 +69,7 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 - `manifest.json`: Chrome MV3 插件清单
 - `popup.html` / `popup.css` / `popup.js`: 弹窗界面与导出交互
 - `content.js`: 报告提取、引用解析与 Markdown 生成逻辑
+- `page-bridge.js`: 用于控制 ChatGPT citation tooltip 的受限页面桥接脚本
 
 ## 注意事项
 

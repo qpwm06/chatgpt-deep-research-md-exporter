@@ -18,6 +18,9 @@ Search-friendly names:
 - Exports only the currently open full-screen report on direct conversation pages
 - Keeps legacy structured extraction for compatible shared pages
 - Resolves ChatGPT internal research citations into inline Markdown links like `[2](url)`
+- Expands a merged citation into every source card actually present in its carousel, while keeping single-source citations single
+- Preserves citation links inside Markdown tables
+- Opens ChatGPT's `Show code` view to export Mermaid source instead of rendered SVG markup
 - Keeps the output clean for Obsidian, Notion, Typora, and GitHub
 - Supports direct download and clipboard copy
 
@@ -54,6 +57,9 @@ This extension rebuilds the report from the currently open conversation page, so
 
 - The exported title can be prefixed, default `gpt-`
 - Inline citations are converted to Markdown links
+- Multiple source cards attached to one citation are exported as distinct numbered links
+- Domain-group headers are ignored so unrelated same-domain URLs are not attached to a citation
+- Mermaid diagrams are exported from their source-code view
 - Full-screen report content is preferred over the surrounding conversation
 - User prompts, the composer, and unrelated assistant replies are excluded
 - Optional LaTeX correction converts `\[ ... \]` and math-only `[ ... ]` display delimiters while leaving Markdown links, plain bracketed text, and code blocks intact
@@ -63,6 +69,7 @@ This extension rebuilds the report from the currently open conversation page, so
 - `manifest.json`: Chrome MV3 extension manifest
 - `popup.html` / `popup.css` / `popup.js`: popup UI and export actions
 - `content.js`: extraction, citation resolution, and Markdown generation
+- `page-bridge.js`: narrowly scoped bridge for ChatGPT's citation tooltip controls
 
 ## Notes
 

@@ -284,6 +284,20 @@ async function sendExportMessage(tab, message) {
 
   if (!orderedFrameIds.includes(0)) orderedFrameIds.push(0);
 
+  let openedSources = false;
+  // 控制按钮与报告正文可能分属父子 frame；先跨 frame 展开来源，再读取正文。
+  for (const frameId of orderedFrameIds) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: 'DEEP_RESEARCH_OPEN_SOURCES',
+      }, { frameId });
+      openedSources ||= response?.openedSources === true;
+    } catch {}
+  }
+  if (openedSources) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+
   let lastResponse = null;
   let lastError = null;
   // Deep Research 正文位于跨域 iframe；逐帧请求可避免顶层错误抢先覆盖正确结果。
@@ -453,3 +467,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   setStatus(t('status_idle'));
   setBusy(false);
 });
+
+// 仅供真实 Chrome 回归测试使用；普通扩展弹窗不会带 reload 参数。
+if (new URLSearchParams(location.search).get('reload') === '1') {
+  document.title = 'Reloading extension';
+  window.setTimeout(() => chrome.runtime.reload(), 100);
+}

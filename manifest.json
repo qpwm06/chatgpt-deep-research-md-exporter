@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Deep Research Markdown Exporter",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "description": "Export Deep Research reports directly from ChatGPT conversations to Markdown with source URLs.",
   "permissions": [
     "activeTab",
@@ -34,6 +34,18 @@
       "all_frames": true,
       "match_origin_as_fallback": true,
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "page-bridge.js"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/*"
+      ]
     }
   ]
 }
