@@ -259,6 +259,15 @@ function isDirectConversationUrl(url) {
   }
 }
 
+// 报告可能位于 connector-openai-deep-research 或 mcp-app-<hash> 等沙箱子域名，子域名不固定。
+function isReportSandboxFrame(frame) {
+  try {
+    return /(?:^|\.)web-sandbox\.oaiusercontent\.com$/i.test(new URL(frame.url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function sendExportMessage(tab, message) {
   if (!isDirectConversationUrl(tab.url) || !chrome.webNavigation?.getAllFrames) {
     return chrome.tabs.sendMessage(tab.id, message);
@@ -269,11 +278,10 @@ async function sendExportMessage(tab, message) {
     frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }) || [];
   } catch {}
 
-  const deepResearchHost = 'connector-openai-deep-research.web-sandbox.oaiusercontent.com';
   const orderedFrameIds = frames
     .sort((left, right) => {
-      const leftDeepResearch = String(left.url || '').includes(deepResearchHost) ? 1 : 0;
-      const rightDeepResearch = String(right.url || '').includes(deepResearchHost) ? 1 : 0;
+      const leftDeepResearch = isReportSandboxFrame(left) ? 1 : 0;
+      const rightDeepResearch = isReportSandboxFrame(right) ? 1 : 0;
       if (leftDeepResearch !== rightDeepResearch) return rightDeepResearch - leftDeepResearch;
       if (left.frameId === 0) return 1;
       if (right.frameId === 0) return -1;
@@ -345,6 +353,10 @@ async function requestExport(force = false) {
   return response.result;
 }
 
+// Firefox 在用户选好保存位置后才读取 blob URL，但保存对话框会先关闭弹窗并使 blob URL 失效，导致下载失败。
+// 因此 Firefox（仅它提供 runtime.getBrowserInfo）直接保存到默认下载目录，Chrome 仍显示保存对话框。
+const SHOW_SAVE_DIALOG = typeof globalThis.browser?.runtime?.getBrowserInfo !== 'function';
+
 function buildDownloadUrl(markdown) {
   const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
   return URL.createObjectURL(blob);
@@ -373,7 +385,7 @@ async function downloadMarkdown() {
     await chrome.downloads.download({
       url,
       filename: sanitizeFilename(result.filename),
-      saveAs: true,
+      saveAs: SHOW_SAVE_DIALOG,
     });
     setTimeout(() => URL.revokeObjectURL(url), 30000);
     setStatus(t('status_download_started'));
