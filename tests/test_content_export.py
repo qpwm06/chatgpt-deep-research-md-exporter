@@ -197,6 +197,30 @@ class ContentExportTest(unittest.TestCase):
         self.assertIn("SELECTED FIRST REPORT", result["markdown"])
         self.assertNotIn("WRONG LATEST REPORT", result["markdown"])
 
+    def test_title_stays_single_when_report_rerenders_during_citation_scan(self):
+        body = f"""
+        <!doctype html><html><body>
+          <div class="_reportPage_16ou1_1">
+            <h1 id="report-title">Rerendered Report Title</h1>
+            <h2>Executive summary</h2>
+            <p>{long_paragraph('RERENDER SUMMARY')}</p>
+            <p>Finding <span aria-describedby="tooltip-1" data-state="closed"><sup role="button" tabindex="0" data-citation-index="1" onclick="
+              const title = document.getElementById('report-title');
+              title.replaceWith(title.cloneNode(true));
+            "><span>1</span></sup></span>.</p>
+            <h2>Evidence</h2>
+            <p>{long_paragraph('RERENDER EVIDENCE')}</p>
+          </div>
+        </body></html>
+        """
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        headings = [line for line in response["result"]["markdown"].splitlines() if line.startswith("# ")]
+        self.assertEqual(headings, ["# gpt-Rerendered Report Title"])
+
     def test_extracts_report_inside_deep_research_content_frame(self):
         body = f"""
         <!doctype html><html><body>
