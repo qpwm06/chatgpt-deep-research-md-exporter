@@ -1,4 +1,4 @@
-# ChatGPT Deep Research Markdown Exporter Chrome 插件
+# ChatGPT Deep Research Markdown Exporter Chrome / Firefox 插件
 
 [English](README.md) | 中文
 
@@ -8,6 +8,7 @@
 
 - ChatGPT Deep Research Markdown Exporter
 - ChatGPT Deep Research 导出 Markdown Chrome 插件
+- ChatGPT Deep Research 导出 Markdown Firefox 扩展
 - ChatGPT Deep Research 引用导出插件
 - ChatGPT 对话报告导出 Markdown
 
@@ -35,13 +36,28 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 - 普通具体对话：`https://chatgpt.com/c/...`
 - 项目内具体对话：`https://chatgpt.com/g/.../c/...`
 - 兼容的旧版报告分享页仍作为后备路径保留
+- 渲染在 ChatGPT 沙箱 iframe（`*.web-sandbox.oaiusercontent.com`）中的报告，包括 `connector-openai-deep-research` 和较新的 `mcp-app-*` 域名
 
 ## 安装方法
+
+### Chrome
 
 1. 打开 `chrome://extensions`
 2. 打开 `开发者模式`
 3. 点击 `加载已解压的扩展程序`
 4. 选择目录：`chatgpt-deep-research-md-exporter`
+
+### Firefox
+
+同样适用于 Zen、Waterfox 等基于 Firefox 的浏览器。
+
+1. 打开 `about:debugging#/runtime/this-firefox`
+2. 点击 `临时载入附加组件…`（Load Temporary Add-on…）
+3. 选择本目录中的 `manifest.json`
+
+在 Firefox 中，`下载 Markdown` 会直接保存到默认下载目录，不弹出保存对话框：Firefox 的保存对话框会先关闭弹窗，导致文件还未读取就下载失败。
+
+临时附加组件会在浏览器重启后移除。如需永久安装，需要由 Mozilla 签名，例如在 addons.mozilla.org 以不公开（unlisted）方式提交。
 
 ## 使用方法
 
@@ -66,7 +82,7 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 ## 文件说明
 
-- `manifest.json`: Chrome MV3 插件清单
+- `manifest.json`: Chrome / Firefox 通用的 MV3 插件清单
 - `popup.html` / `popup.css` / `popup.js`: 弹窗界面与导出交互
 - `content.js`: 报告提取、引用解析与 Markdown 生成逻辑
 - `page-bridge.js`: 用于控制 ChatGPT citation tooltip 的受限页面桥接脚本
@@ -84,4 +100,4 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 
 ## 关键词
 
-`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT 引用导出`, `对话报告`, `Markdown 导出`, `Chrome 插件`
+`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT Firefox Add-on`, `ChatGPT 引用导出`, `对话报告`, `Markdown 导出`, `Chrome 插件`

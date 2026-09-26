@@ -1,13 +1,14 @@
-# ChatGPT Deep Research Markdown Exporter Chrome Extension
+# ChatGPT Deep Research Markdown Exporter Chrome / Firefox Extension
 
 English | [中文](README.zh-CN.md)
 
-Chrome extension for exporting an open **ChatGPT Deep Research full-screen report** directly from its conversation to **Markdown (.md)** with resolved inline citations.
+Chrome and Firefox extension for exporting an open **ChatGPT Deep Research full-screen report** directly from its conversation to **Markdown (.md)** with resolved inline citations.
 
 Search-friendly names:
 
 - ChatGPT Deep Research Markdown Exporter
 - ChatGPT Deep Research Export to Markdown Chrome Extension
+- ChatGPT Deep Research Export to Markdown Firefox Add-on
 - ChatGPT Deep Research Citation Exporter
 - ChatGPT Conversation Report Exporter
 
@@ -35,13 +36,28 @@ This extension rebuilds the report from the currently open conversation page, so
 - Direct conversations: `https://chatgpt.com/c/...`
 - Project conversations: `https://chatgpt.com/g/.../c/...`
 - Compatible legacy shared report pages remain supported as a fallback
+- Reports rendered inside ChatGPT's sandboxed frames on `*.web-sandbox.oaiusercontent.com`, including both `connector-openai-deep-research` and the newer `mcp-app-*` hosts
 
 ## Installation
+
+### Chrome
 
 1. Open `chrome://extensions`
 2. Enable `Developer mode`
 3. Click `Load unpacked`
 4. Select this folder: `chatgpt-deep-research-md-exporter`
+
+### Firefox
+
+Also works in Firefox-based browsers such as Zen and Waterfox.
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click `Load Temporary Add-on…`
+3. Select `manifest.json` in this folder
+
+In Firefox, `Download Markdown` saves straight to your default downloads folder without a Save dialog, because Firefox's Save dialog closes the popup before the file is read, which makes the download fail.
+
+Temporary add-ons are removed when the browser restarts. A permanent install requires the add-on to be signed by Mozilla, for example as an unlisted add-on on addons.mozilla.org.
 
 ## Usage
 
@@ -66,7 +82,7 @@ This extension rebuilds the report from the currently open conversation page, so
 
 ## Files
 
-- `manifest.json`: Chrome MV3 extension manifest
+- `manifest.json`: MV3 extension manifest for Chrome and Firefox
 - `popup.html` / `popup.css` / `popup.js`: popup UI and export actions
 - `content.js`: extraction, citation resolution, and Markdown generation
 - `page-bridge.js`: narrowly scoped bridge for ChatGPT's citation tooltip controls
@@ -84,4 +100,4 @@ This extension rebuilds the report from the currently open conversation page, so
 
 ## Keywords
 
-`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT citation export`, `conversation report`, `Markdown exporter`, `Chrome extension`
+`ChatGPT Deep Research`, `Deep Research Markdown`, `ChatGPT Chrome Extension`, `ChatGPT Firefox Add-on`, `ChatGPT citation export`, `conversation report`, `Markdown exporter`, `Chrome extension`
