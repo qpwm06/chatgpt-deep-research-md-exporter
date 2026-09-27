@@ -59,6 +59,8 @@ This extension rebuilds the report from the currently open conversation page, so
 - Inline citations are converted to Markdown links
 - Multiple source cards attached to one citation are exported as distinct numbered links
 - Domain-group headers are ignored so unrelated same-domain URLs are not attached to a citation
+- Citation popups are read by the URL they show, so a citation is not matched to another page on the same site
+- Citations to files uploaded to the conversation have no URL and are exported as the file name, e.g. `[report.pdf]`
 - Mermaid diagrams are exported from their source-code view
 - Full-screen report content is preferred over the surrounding conversation
 - User prompts, the composer, and unrelated assistant replies are excluded
