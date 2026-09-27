@@ -2008,12 +2008,14 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
   }
 
   function findTitleElement(root) {
-    if (!(root instanceof Element)) return null;
-    const ownTitle = root.querySelector('h1');
-    if (ownTitle) return ownTitle;
+    if (root instanceof Element) {
+      const ownTitle = root.querySelector('h1');
+      if (ownTitle) return ownTitle;
 
-    const layer = root.closest(FULLSCREEN_LAYER_SELECTOR);
-    return layer?.querySelector('h1') || null;
+      const layerTitle = root.closest(FULLSCREEN_LAYER_SELECTOR)?.querySelector('h1');
+      if (layerTitle) return layerTitle;
+    }
+    return document.querySelector('main h1') || document.querySelector('h1');
   }
 
   async function exportMarkdown(titlePrefix = '', sourceUrl = location.href, includeDiagnostics = false) {
@@ -2036,7 +2038,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       throw new Error('没有识别到 Deep Research 报告主体。请先打开全屏报告页。');
     }
 
-    const titleElement = findTitleElement(root) || document.querySelector('main h1') || document.querySelector('h1');
+    const titleElement = findTitleElement(root);
     const title = applyTitlePrefix(
       normalizeText(titleElement?.textContent || document.title || 'Deep Research Report'),
       titlePrefix,
@@ -2055,8 +2057,9 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       }
     }
 
+    // 打开来源和 citation 浮层时 React 可能重建标题节点；渲染前重新查找，否则新标题节点会被重复导出。
     const markdownBody = renumberCitationLinks(
-      renderChildren(root, { sourcesByCitationIndex, skipTitleElement: titleElement }),
+      renderChildren(root, { sourcesByCitationIndex, skipTitleElement: findTitleElement(root) }),
     );
     const markdown = finalizeMarkdown(markdownBody, sources, title, sourceUrl);
     const citationMatches = markdownBody.match(/\[\d+\]\(https?:\/\/[^)]+\)/g) || [];
