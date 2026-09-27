@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,86 @@ TARGET_URL = (
 def long_paragraph(label: str) -> str:
     sentence = f"{label} records the experimental observation and explains the underlying mechanism. "
     return sentence * 18
+
+
+def citation_card_report(cards, panel_entries, paragraphs, next_card_render_ms=0):
+    citation = (
+        '<span aria-describedby="tooltip-{0}" data-state="closed">'
+        '<sup role="button" tabindex="0" data-citation-index="{0}" onclick="openCitationCard({0})"><span>{0}</span></sup></span>'
+    )
+    report = "\n".join(
+        f"<p>{re.sub(r'\[\[(\d+)\]\]', lambda match: citation.format(match.group(1)), text)}</p>" for text in paragraphs
+    )
+    return f"""
+    <!doctype html><html><body>
+      <script>
+        const citationCards = {json.dumps(cards)};
+        let activeCitation = 0;
+        let activeCard = 0;
+
+        function renderCitationCard(complete) {{
+          const id = `tooltip-${{activeCitation}}`;
+          let tooltip = document.getElementById(id);
+          if (!tooltip) {{
+            tooltip = document.createElement('div');
+            tooltip.id = id;
+            tooltip.setAttribute('role', 'tooltip');
+            tooltip.setAttribute('data-state', 'open');
+            tooltip.style = 'position: fixed; left: 300px; top: 200px; width: 344px; height: 120px; background: white;';
+            document.body.appendChild(tooltip);
+          }}
+          const cards = citationCards[activeCitation];
+          const card = cards[activeCard];
+          const controls = cards.length > 1
+            ? "<button aria-label='←'>←</button><button aria-label='→' onclick='showNextCitationCard()'>→</button>"
+            : '';
+          tooltip.innerHTML = `${{controls}}<div><div aria-hidden='true'>•</div><span class='card-site'></span></div>`
+            + "<div><div class='card-title'></div><div class='card-url'></div></div>";
+          tooltip.querySelector('.card-site').textContent = card.file || card.site;
+          if (complete) {{
+            tooltip.querySelector('.card-title').textContent = card.file || card.title;
+            tooltip.querySelector('.card-url').textContent = card.file || card.url;
+          }}
+        }}
+
+        function openCitationCard(index) {{
+          activeCitation = index;
+          activeCard = 0;
+          renderCitationCard(true);
+        }}
+
+        function showNextCitationCard() {{
+          activeCard = (activeCard + 1) % citationCards[activeCitation].length;
+          renderCitationCard({str(next_card_render_ms == 0).lower()});
+          setTimeout(() => renderCitationCard(true), {next_card_render_ms});
+        }}
+      </script>
+      <aside style="position: fixed; right: 0; top: 0; width: 360px; background: white;">
+        <div role="tabpanel">
+          <section aria-labelledby="card-citations">
+            <p id="card-citations">Citations</p>
+            {"".join(panel_entries)}
+          </section>
+        </div>
+      </aside>
+      <main>
+        <h1>Citation Card Report</h1>
+        <h2>Evidence</h2>
+        <p>{long_paragraph('CITATION CARD REPORT')}</p>
+        {report}
+        <h2>Conclusion</h2>
+        <p>{long_paragraph('CITATION CARD CONCLUSION')}</p>
+      </main>
+    </body></html>
+    """
+
+
+def web_panel_entry(index, title, url):
+    return f"<div><button data-citation-index='{index}'>{index}</button><a href='{url}'>{title}</a></div>"
+
+
+def file_panel_entry(index, name):
+    return f"<div><button data-citation-index='{index}'>{index}</button><div><p>{name}</p><a target='_blank'>{name}</a></div></div>"
 
 
 def export_fixture(page, body: str, url: str = TARGET_URL):
@@ -277,6 +358,78 @@ class ContentExportTest(unittest.TestCase):
         self.assertIn("[1](https://alpha.example/study)", result["markdown"])
         self.assertIn("[2](https://beta.example/paper)", result["markdown"])
         self.assertNotIn("uncited.example", result["markdown"])
+
+    def test_labels_citations_to_uploaded_files_with_their_names(self):
+        open_sources = """
+          <script>
+            function sourceEntry(index, name, href) {
+              const entry = document.createElement('button');
+              entry.type = 'button';
+              entry.setAttribute('aria-label', `Source ${index}`);
+              const marker = document.createElement('button');
+              marker.type = 'button';
+              marker.setAttribute('aria-label', `Scroll report to citation ${index}`);
+              marker.dataset.citationIndex = String(index);
+              marker.textContent = String(index);
+              const details = document.createElement('div');
+              const title = document.createElement('p');
+              title.textContent = name;
+              const link = document.createElement('a');
+              link.target = '_blank';
+              link.textContent = href ? 'example.gov' : name;
+              if (href) link.href = href;
+              details.append(title, link);
+              const row = document.createElement('div');
+              row.append(marker, details);
+              entry.append(row);
+              return entry;
+            }
+            function openSources() {
+              setTimeout(() => {
+                const section = document.createElement('section');
+                section.setAttribute('aria-labelledby', 'report-references-citations');
+                section.innerHTML = "<p id='report-references-citations'>Citations · 3</p>";
+                section.append(
+                  sourceEntry(1, 'project-report.pdf'),
+                  sourceEntry(2, 'Law 9097', 'https://example.gov/law'),
+                  sourceEntry(3, 'notes [v2].docx'),
+                );
+                const panel = document.createElement('aside');
+                panel.innerHTML = "<div role='tabpanel'></div>";
+                panel.firstChild.append(section);
+                document.body.append(panel);
+              }, 350);
+            }
+          </script>
+        """
+        citation = (
+            '<span aria-describedby="tooltip-{0}" data-state="closed">'
+            '<sup role="button" tabindex="0" data-citation-index="{0}"><span>{0}</span></sup></span>'
+        )
+        body = f"""
+        <!doctype html><html><body>
+          {open_sources}
+          <button aria-label="Sources and activity" aria-expanded="false" onclick="openSources()"></button>
+          <main>
+            <h1>File Citation Report</h1>
+            <h2>Evidence</h2>
+            <p>{long_paragraph('FILE CITATION REPORT')}</p>
+            <p>Uploaded finding {citation.format(1)}.</p>
+            <p>Mixed finding {citation.format(3)}{citation.format(2)}.</p>
+            <h2>Conclusion</h2>
+            <p>{long_paragraph('FILE CITATION CONCLUSION')}</p>
+          </main>
+        </body></html>
+        """
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        markdown = response["result"]["markdown"]
+        self.assertIn("Uploaded finding [project-report.pdf].", markdown)
+        self.assertIn("Mixed finding [notes \\[v2\\].docx][1](https://example.gov/law).", markdown)
+        self.assertEqual(response["result"]["citationCount"], 1)
 
     def test_expands_one_fullscreen_citation_into_multiple_source_links(self):
         body = f"""
@@ -606,6 +759,104 @@ class ContentExportTest(unittest.TestCase):
             markdown,
         )
         self.assertLess(elapsed_ms, 4000)
+
+    def test_uses_the_url_shown_in_a_linkless_citation_card(self):
+        appointments = "https://agency.example/appointments?utm_source=chatgpt.com"
+        contact = "https://agency.example/contact?utm_source=chatgpt.com"
+        body = citation_card_report(
+            cards={
+                4: [{"site": "agency.example", "title": "Agency |", "url": appointments}],
+                14: [{"site": "agency.example", "title": "Agency |", "url": contact}],
+            },
+            panel_entries=[
+                web_panel_entry(4, "Agency | Appointments", appointments),
+                web_panel_entry(14, "Agency | Contact", contact),
+            ],
+            paragraphs=["Appointment rule [[4]].", "Complaint rule [[14]]."],
+        )
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        markdown = response["result"]["markdown"]
+        self.assertIn(f"Appointment rule [1]({appointments}).", markdown)
+        self.assertIn(f"Complaint rule [2]({contact}).", markdown)
+
+    def test_labels_file_cards_instead_of_guessing_a_web_source(self):
+        brief_page = "https://agency.example/agency-research-brief?utm_source=chatgpt.com"
+        body = citation_card_report(
+            cards={
+                2: [{"file": "agency-research-brief.md"}],
+                4: [{"site": "agency.example", "title": "Agency research brief", "url": brief_page}],
+            },
+            panel_entries=[
+                file_panel_entry(2, "agency-research-brief.md"),
+                web_panel_entry(4, "Agency research brief", brief_page),
+            ],
+            paragraphs=["Uploaded brief finding [[2]].", "Web page finding [[4]]."],
+        )
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        markdown = response["result"]["markdown"]
+        self.assertIn("Uploaded brief finding [agency-research-brief.md].", markdown)
+        self.assertIn(f"Web page finding [1]({brief_page}).", markdown)
+
+    def test_keeps_reading_carousel_cards_after_a_file_card(self):
+        page = "https://agency.example/guidance?utm_source=chatgpt.com"
+        body = citation_card_report(
+            cards={
+                1: [{"file": "agency-notes.pdf"}],
+                5: [
+                    {"file": "agency-notes.pdf"},
+                    {"site": "agency.example", "title": "Agency guidance", "url": page},
+                ],
+            },
+            panel_entries=[
+                file_panel_entry(1, "agency-notes.pdf"),
+                web_panel_entry(5, "Agency guidance", page),
+            ],
+            paragraphs=["Notes finding [[1]].", "Merged finding [[5]]."],
+        )
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        markdown = response["result"]["markdown"]
+        self.assertIn("Notes finding [agency-notes.pdf].", markdown)
+        self.assertIn(f"Merged finding [1]({page})[agency-notes.pdf].", markdown)
+
+    def test_reads_citation_cards_after_they_finish_rendering(self):
+        other = "https://journal.example/other-study"
+        first = "https://journal.example/first-study"
+        second = "https://journal.example/second-study"
+        body = citation_card_report(
+            cards={
+                1: [
+                    {"site": "journal.example", "title": "Journal | First study", "url": first},
+                    {"site": "journal.example", "title": "Journal | Second study", "url": second},
+                ],
+                3: [{"site": "journal.example", "title": "Journal | Other study", "url": other}],
+            },
+            panel_entries=[
+                web_panel_entry(3, "Journal | Other study", other),
+                web_panel_entry(1, "Journal | First study", first),
+            ],
+            paragraphs=["Two studies [[1]].", "Other study [[3]]."],
+            next_card_render_ms=250,
+        )
+        frame_url = "https://connector-openai-deep-research.web-sandbox.oaiusercontent.com/report"
+
+        response = export_fixture(self.page, body, frame_url)
+
+        self.assertTrue(response["ok"])
+        markdown = response["result"]["markdown"]
+        self.assertIn(f"Two studies [1]({first})[2]({second}).", markdown)
+        self.assertIn(f"Other study [3]({other}).", markdown)
 
     def test_preserves_citation_urls_inside_tables(self):
         body = f"""

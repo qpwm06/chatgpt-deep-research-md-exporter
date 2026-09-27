@@ -317,6 +317,10 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return String(text || '').replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
   }
 
+  function escapeLinkText(text) {
+    return String(text || '').replace(/[\\[\]]/g, '\\$&');
+  }
+
   function toAbsoluteUrl(href) {
     try {
       return new URL(href, location.href).href;
@@ -571,6 +575,28 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return Array.from(specificEntries.values());
   }
 
+  // 对话中上传的文件没有 URL：来源条目只显示文件名，链接也不带 href。
+  function collectCitationFileSources(sections) {
+    const fileSources = [];
+
+    for (const section of sections) {
+      for (const anchor of Array.from(section.querySelectorAll('a:not([href])')).filter(isVisible)) {
+        const entry = findCitationEntry(anchor, section);
+        if (!entry) continue;
+
+        const hasWebLink = Array.from(entry.container.querySelectorAll('a[href]'))
+          .some((link) => isExternalUrl(toAbsoluteUrl(link.getAttribute('href'))));
+        const index = parseCitationIds(entry.marker)[0];
+        const name = normalizeText(anchor.textContent);
+        if (hasWebLink || !Number.isInteger(index) || index <= 0 || !name) continue;
+
+        fileSources.push({ index, name });
+      }
+    }
+
+    return dedupeBy(fileSources, (source) => `${source.index}::${source.name}`);
+  }
+
   const SHOW_CODE_LABEL_RE = /^(?:show|view|display)(?:\s+the)?\s+code$|^(?:显示|查看|展开)代码$/i;
 
   function controlLabels(element) {
@@ -716,11 +742,37 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     );
   }
 
-  function carouselCardMetadata(container) {
-    const leafTexts = Array.from(container.querySelectorAll('div, span, p'))
+  function carouselLeafTexts(container) {
+    return Array.from(container.querySelectorAll('div, span, p'))
       .filter((element) => element.children.length === 0 && !element.closest('button'))
       .map((element) => normalizeText(element.textContent))
       .filter(Boolean);
+  }
+
+  // 浮层卡片把来源 URL 显示为纯文本（没有 href）；按原文读取比按标题猜测可靠。
+  function carouselShownUrls(container) {
+    return dedupeBy(
+      carouselLeafTexts(container)
+        .filter((text) => /^https?:\/\/\S+$/i.test(text))
+        .map(toAbsoluteUrl)
+        .filter((url) => isExternalUrl(url) && !isBareHomepageUrl(url)),
+      (url) => url,
+    );
+  }
+
+  function carouselShowsFile(container, fileNames) {
+    return carouselLeafTexts(container).some((text) => fileNames.includes(text));
+  }
+
+  async function waitForCarouselCardContent(container, fileNames) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      if (carouselShownUrls(container).length > 0 || carouselShowsFile(container, fileNames)) return;
+      await sleep(50);
+    }
+  }
+
+  function carouselCardMetadata(container) {
+    const leafTexts = carouselLeafTexts(container);
     const imageHosts = Array.from(container.querySelectorAll('img[alt]'))
       .map((image) => normalizeText(image.getAttribute('alt')))
       .filter((text) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(text));
@@ -764,8 +816,10 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return best?.score >= 55 ? best.source : null;
   }
 
-  async function carouselSourceEntries(carousel, citationIndex, knownSources = []) {
+  async function carouselSourceEntries(carousel, citationIndex, knownSources = [], fileNames = [], expectShownUrl = false) {
     if (!carousel?.container) return [];
+    // 轮播切换后新卡片会先只显示域名，稍后才补上标题和 URL；过早读取会按域名猜错来源。
+    if (expectShownUrl) await waitForCarouselCardContent(carousel.container, fileNames);
     const reactResult = await requestPageBridge(carousel.container, 'urls');
     const reactUrls = Array.isArray(reactResult?.urls) ? reactResult.urls : [];
     const linkedUrls = Array.from(carousel.container.querySelectorAll('a[href]'))
@@ -788,6 +842,16 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       (source) => source.url,
     );
     if (directSources.length > 0) return directSources;
+
+    const shownUrls = carouselShownUrls(carousel.container);
+    if (shownUrls.length > 0) {
+      return shownUrls.map((url) => ({ index: citationIndex, title: metadata.title || url, url, blockText: metadata.title || url }));
+    }
+    // 上传文件卡片没有网页来源；返回文件名，不能再按标题词匹配到同名网页。
+    const fileName = carouselLeafTexts(carousel.container).find((text) => fileNames.includes(text));
+    if (fileName) return [{ index: citationIndex, name: fileName }];
+    // 同一轮播的卡片本应显示 URL；仍未显示说明卡片未渲染完，宁可跳过也不按域名猜测。
+    if (expectShownUrl) return [];
 
     const matchedSource = matchCarouselCardSource(carousel, knownSources);
     if (matchedSource) {
@@ -1257,8 +1321,9 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     return null;
   }
 
-  async function collectCitationCarouselSources(root, knownSources = []) {
+  async function collectCitationCarouselSources(root, knownSources = [], fileNames = []) {
     const entries = [];
+    const fileEntries = [];
     const citationElements = [];
     const usedCitationIndexes = new Set();
 
@@ -1284,12 +1349,20 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       concealedContainers.set(carousel.container, concealCitationCarousel(carousel));
       try {
         const visitedSignatures = new Set();
+        let expectShownUrl = false;
         for (let page = 0; page < 8; page += 1) {
-          const currentSources = await carouselSourceEntries(carousel, citationIndex, knownSources);
-          const signature = currentSources.map((source) => source.url).sort().join('\n');
-          if (!signature || visitedSignatures.has(signature)) break;
+          const currentSources = await carouselSourceEntries(
+            carousel, citationIndex, knownSources, fileNames, expectShownUrl,
+          );
+          expectShownUrl ||= carouselShownUrls(carousel.container).length > 0;
+          const webSources = currentSources.filter((source) => source.url);
+          // 文件卡片或未渲染完的卡片没有 URL；用卡片文字判断是否已翻回起点，继续读取后面的卡片。
+          const signature = webSources.map((source) => source.url).sort().join('\n')
+            || `card:${normalizeText(carousel.container.textContent)}`;
+          if (visitedSignatures.has(signature)) break;
           visitedSignatures.add(signature);
-          entries.push(...currentSources);
+          entries.push(...webSources);
+          fileEntries.push(...currentSources.filter((source) => !source.url));
 
           const nextButton = findCarouselNextButton(carousel);
           if (!nextButton) break;
@@ -1312,7 +1385,10 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       }
     }
 
-    return dedupeBy(entries, (source) => `${source.index}::${source.url}`);
+    return {
+      webSources: dedupeBy(entries, (source) => `${source.index}::${source.url}`),
+      fileSources: dedupeBy(fileEntries, (source) => `${source.index}::${source.name}`),
+    };
   }
 
   function collectFallbackSources(root) {
@@ -1361,10 +1437,14 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       sources = collectFallbackSources(fallbackRoot);
     }
 
+    // 上传文件没有 URL；先从来源面板取得文件名，读取浮层卡片时据此识别文件卡片。
+    const panelFileSources = collectCitationFileSources(collectCitationSections());
     // Tooltip 本身没有 href；先取得右栏完整 URL，再按当前卡片标题逐张匹配。
-    const carouselSources = await collectCitationCarouselSources(root, sources);
+    const carouselSources = await collectCitationCarouselSources(
+      root, sources, panelFileSources.map((source) => source.name),
+    );
 
-    sources = dedupeBy([...carouselSources, ...sources], (source) => `${source.index}::${source.url}`)
+    sources = dedupeBy([...carouselSources.webSources, ...sources], (source) => `${source.index}::${source.url}`)
       .filter((source) => !isBareHomepageUrl(source.url));
 
     sources.sort((left, right) => left.index - right.index);
@@ -1392,7 +1472,13 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       }
     }
 
-    return Array.from(normalizedByUrl.values());
+    return {
+      sources: Array.from(normalizedByUrl.values()),
+      fileSources: dedupeBy(
+        [...carouselSources.fileSources, ...panelFileSources],
+        (source) => `${source.index}::${source.name}`,
+      ),
+    };
   }
 
   function scoreCandidate(element) {
@@ -1761,7 +1847,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     }
     return ids
       .flatMap((id) => sourceGroups.get(id))
-      .map((source) => `[${source.index}](${source.url})`)
+      .map((source) => (source.url ? `[${source.index}](${source.url})` : `[${escapeLinkText(source.name)}]`))
       .join('');
   }
 
@@ -2041,7 +2127,7 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       normalizeText(titleElement?.textContent || document.title || 'Deep Research Report'),
       titlePrefix,
     );
-    const sources = await extractSources(root);
+    const { sources, fileSources } = await extractSources(root);
     // 来源面板和 citation 浮层会触发 React 重渲染；最后再切 Mermaid 源码，避免被恢复成 SVG。
     await revealMermaidCode(root);
     const sourcesByCitationIndex = new Map();
@@ -2053,6 +2139,13 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
         group.push(source);
         sourcesByCitationIndex.set(citationIndex, group);
       }
+    }
+
+    // 上传文件没有 URL；按文件名标注，避免裸编号被误认为网页来源编号。
+    for (const fileSource of fileSources) {
+      const group = sourcesByCitationIndex.get(fileSource.index) || [];
+      group.push(fileSource);
+      sourcesByCitationIndex.set(fileSource.index, group);
     }
 
     const markdownBody = renumberCitationLinks(

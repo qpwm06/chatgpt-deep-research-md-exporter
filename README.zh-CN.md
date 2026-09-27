@@ -59,6 +59,8 @@ ChatGPT Deep Research 默认导出有时会保留 ChatGPT 内部引用格式，�
 - 正文引用会转换成 Markdown 内联链接
 - 一个 citation 对应多张来源卡片时，会导出为多个独立编号链接
 - 忽略域名分组顶部链接，避免把同域名下的无关 URL 绑定到 citation
+- 按 citation 浮层中显示的 URL 识别来源，不会把同一网站的其他页面误配到 citation
+- 引用对话中上传的文件时没有 URL，导出为文件名，例如 `[report.pdf]`
 - Mermaid 图表从源码视图导出
 - 全屏报告正文优先于外围聊天内容
 - 用户提问、输入框和无关助手回复不会进入导出结果
