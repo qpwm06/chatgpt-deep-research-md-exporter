@@ -105,6 +105,8 @@
           result = { ok: invokeReactHandlers(element, ['onPointerMove', 'onPointerEnter', 'onMouseEnter', 'onFocus']) };
         } else if (action === 'unhover') {
           result = { ok: invokeReactHandlers(element, ['onPointerLeave', 'onMouseLeave', 'onBlur']) };
+        } else if (action === 'display-mode') {
+          result = { ok: true, displayMode: window.openai?.displayMode };
         } else {
           result = { ok: true, urls: collectUrls(element) };
         }

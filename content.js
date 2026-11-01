@@ -932,6 +932,15 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
     });
   }
 
+  // window.openai 位于页面主世界：Firefox 经 Xray 直接读取，Chrome 经 page-bridge 读取。
+  async function readDisplayMode() {
+    const directMode = window.wrappedJSObject?.openai?.displayMode;
+    if (typeof directMode === 'string') return directMode;
+
+    const bridged = await requestPageBridge(document.documentElement, 'display-mode');
+    return typeof bridged?.displayMode === 'string' ? bridged.displayMode : '';
+  }
+
   async function activateButton(element) {
     const bridgeResult = await requestPageBridge(element, 'click');
     if (bridgeResult?.ok) return;
@@ -2143,6 +2152,12 @@ if (!globalThis.__deepResearchMarkdownExporterLoaded) {
       );
       sendResponse({ ok: Boolean(result), result });
       return undefined;
+    }
+    if (message?.type === 'DEEP_RESEARCH_DESCRIBE_REPORT') {
+      readDisplayMode()
+        .then((displayMode) => sendResponse({ ok: true, hasReport: Boolean(findReportRoot()), displayMode }))
+        .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      return true;
     }
     if (message?.type === 'DEEP_RESEARCH_OPEN_SOURCES') {
       sendResponse({ ok: true, openedSources: maybeOpenSourcesPanels() });
