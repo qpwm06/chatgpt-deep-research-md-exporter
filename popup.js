@@ -28,7 +28,7 @@ const MESSAGES = {
     hero_subtitle: 'Export the open full-screen report from a ChatGPT conversation to `.md`.',
     prefix_label: 'Title Prefix',
     status_idle: 'Open the report full screen, then start detection.',
-    status_checking: 'Checking current tab…',
+    status_checking: 'Reading the report. This can take a few minutes; keep this popup open.',
     status_generating: 'Generating Markdown…',
     status_ready: 'Page detected. You can download or copy now.',
     status_download_started: 'Markdown download started.',
@@ -50,6 +50,7 @@ const MESSAGES = {
     summary_latex_fixes: 'LaTeX Fixes Available',
     error_tab: 'No readable active tab was found.',
     error_page: 'Please open a Deep Research report in a ChatGPT conversation first.',
+    error_choose_report: 'This conversation has several reports. Open the one you want full screen, then start detection again.',
     generic_export_failed: 'Export failed.',
     generic_download_failed: 'Download failed.',
     generic_copy_failed: 'Copy failed.',
@@ -59,7 +60,7 @@ const MESSAGES = {
     hero_subtitle: '直接把 ChatGPT 对话中已打开的全屏报告导出为 `.md`。',
     prefix_label: '标题前缀',
     status_idle: '请先打开目标报告的全屏视图，然后点击开始识别。',
-    status_checking: '正在检查当前标签页…',
+    status_checking: '正在读取报告，可能需要几分钟，请保持此弹窗打开。',
     status_generating: '正在生成 Markdown…',
     status_ready: '页面已识别，可以下载或复制。',
     status_download_started: 'Markdown 已开始下载。',
@@ -81,6 +82,7 @@ const MESSAGES = {
     summary_latex_fixes: '可修正 LaTeX',
     error_tab: '没有可用的当前标签页。',
     error_page: '请先进入具体 ChatGPT 对话并打开 Deep Research 全屏报告。',
+    error_choose_report: '此对话包含多份报告。请先全屏打开要导出的报告，再重新点击开始识别。',
     generic_export_failed: '导出失败。',
     generic_download_failed: '下载失败。',
     generic_copy_failed: '复制失败。',
@@ -259,6 +261,33 @@ function isDirectConversationUrl(url) {
   }
 }
 
+// 报告可能位于 connector-openai-deep-research 或 mcp-app-<hash> 等沙箱子域名，子域名不固定。
+function isReportSandboxFrame(frame) {
+  try {
+    return /(?:^|\.)web-sandbox\.oaiusercontent\.com$/i.test(new URL(frame.url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// 对话可含多份报告；只处理全屏打开的那份，否则会导出错误的报告，并切换用户正在查看的来源面板。
+async function selectReportFrames(tab, frameIds) {
+  const frames = await Promise.all(frameIds.map(async (frameId) => {
+    try {
+      const state = await chrome.tabs.sendMessage(tab.id, { type: 'DEEP_RESEARCH_DESCRIBE_REPORT' }, { frameId });
+      return { frameId, ...state };
+    } catch {
+      return { frameId };
+    }
+  }));
+
+  const reports = frames.filter((frame) => frame.hasReport && frame.displayMode);
+  const openReports = reports.filter((frame) => frame.displayMode === 'fullscreen');
+  if (openReports.length > 0) return openReports.map((frame) => frame.frameId);
+  if (reports.length > 1) throw new Error(t('error_choose_report'));
+  return frameIds;
+}
+
 async function sendExportMessage(tab, message) {
   if (!isDirectConversationUrl(tab.url) || !chrome.webNavigation?.getAllFrames) {
     return chrome.tabs.sendMessage(tab.id, message);
@@ -269,11 +298,10 @@ async function sendExportMessage(tab, message) {
     frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }) || [];
   } catch {}
 
-  const deepResearchHost = 'connector-openai-deep-research.web-sandbox.oaiusercontent.com';
   const orderedFrameIds = frames
     .sort((left, right) => {
-      const leftDeepResearch = String(left.url || '').includes(deepResearchHost) ? 1 : 0;
-      const rightDeepResearch = String(right.url || '').includes(deepResearchHost) ? 1 : 0;
+      const leftDeepResearch = isReportSandboxFrame(left) ? 1 : 0;
+      const rightDeepResearch = isReportSandboxFrame(right) ? 1 : 0;
       if (leftDeepResearch !== rightDeepResearch) return rightDeepResearch - leftDeepResearch;
       if (left.frameId === 0) return 1;
       if (right.frameId === 0) return -1;
@@ -284,9 +312,11 @@ async function sendExportMessage(tab, message) {
 
   if (!orderedFrameIds.includes(0)) orderedFrameIds.push(0);
 
+  const targetFrameIds = await selectReportFrames(tab, orderedFrameIds);
+
   let openedSources = false;
   // 控制按钮与报告正文可能分属父子 frame；先跨 frame 展开来源，再读取正文。
-  for (const frameId of orderedFrameIds) {
+  for (const frameId of targetFrameIds) {
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         type: 'DEEP_RESEARCH_OPEN_SOURCES',
@@ -301,7 +331,7 @@ async function sendExportMessage(tab, message) {
   let lastResponse = null;
   let lastError = null;
   // Deep Research 正文位于跨域 iframe；逐帧请求可避免顶层错误抢先覆盖正确结果。
-  for (const frameId of orderedFrameIds) {
+  for (const frameId of targetFrameIds) {
     try {
       const response = await chrome.tabs.sendMessage(tab.id, message, { frameId });
       if (response?.ok) return response;
@@ -345,6 +375,10 @@ async function requestExport(force = false) {
   return response.result;
 }
 
+// Firefox 在用户选好保存位置后才读取 blob URL，但保存对话框会先关闭弹窗并使 blob URL 失效，导致下载失败。
+// 因此 Firefox（仅它提供 runtime.getBrowserInfo）直接保存到默认下载目录，Chrome 仍显示保存对话框。
+const SHOW_SAVE_DIALOG = typeof globalThis.browser?.runtime?.getBrowserInfo !== 'function';
+
 function buildDownloadUrl(markdown) {
   const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
   return URL.createObjectURL(blob);
@@ -373,7 +407,7 @@ async function downloadMarkdown() {
     await chrome.downloads.download({
       url,
       filename: sanitizeFilename(result.filename),
-      saveAs: true,
+      saveAs: SHOW_SAVE_DIALOG,
     });
     setTimeout(() => URL.revokeObjectURL(url), 30000);
     setStatus(t('status_download_started'));

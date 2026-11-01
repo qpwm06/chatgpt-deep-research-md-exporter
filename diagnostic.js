@@ -15,6 +15,15 @@ function isChatGptConversation(url) {
   }
 }
 
+// 报告可能位于 connector-openai-deep-research 或 mcp-app-<hash> 等沙箱子域名，子域名不固定。
+function isReportSandboxFrame(frame) {
+  try {
+    return /(?:^|\.)web-sandbox\.oaiusercontent\.com$/i.test(new URL(frame.url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function reloadExtensionOnce() {
   const key = 'chatgpt-exporter-last-diagnostic-reload';
   const lastReload = Number(localStorage.getItem(key) || 0);
@@ -30,10 +39,9 @@ async function reloadExtensionOnce() {
 
 async function sendExportMessage(tab) {
   const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id }) || [];
-  const deepResearchHost = 'connector-openai-deep-research.web-sandbox.oaiusercontent.com';
   const orderedFrames = frames.sort((left, right) => {
-    const leftReport = String(left.url || '').includes(deepResearchHost) ? 1 : 0;
-    const rightReport = String(right.url || '').includes(deepResearchHost) ? 1 : 0;
+    const leftReport = isReportSandboxFrame(left) ? 1 : 0;
+    const rightReport = isReportSandboxFrame(right) ? 1 : 0;
     if (leftReport !== rightReport) return rightReport - leftReport;
     if (left.frameId === 0) return 1;
     if (right.frameId === 0) return -1;
